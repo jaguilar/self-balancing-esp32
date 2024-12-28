@@ -35,20 +35,21 @@ struct IntRatio {
           std::format("ratio * max_value too large : {}\n",
                       static_cast<float>(max_input) * value));
     }
-    int32_t denom_shift = i;
-    int32_t num = value * (1 << denom_shift);
+    const int32_t log2_denominator = i;
+    const int32_t numerator = value * (1 << log2_denominator);
 
-    // Verify we've found a close enough ratio, or else we'll fail.
-    float calculated_ratio = static_cast<float>(num) / (1 << denom_shift);
-    float relative_error = std::abs(calculated_ratio - value) / value;
+    const float calculated_ratio =
+        static_cast<float>(numerator) / (1 << log2_denominator);
+    const float relative_error = std::abs(calculated_ratio - value) / value;
     if (relative_error > max_error) {
       return std::unexpected(
           std::format("Cannot find ratio with low enough relative error: "
-                      "{} => ({} / (2^{})) = {} err={} max_err={}\n",
-                      value, num, denom_shift, calculated_ratio, relative_error,
-                      max_error));
+                      "{} => ({} / (2^{})) ~= {} err={} max_err={}\n",
+                      value, numerator, log2_denominator, calculated_ratio,
+                      relative_error, max_error));
     }
-    return IntRatio{.numerator = num, .log2_denominator = denom_shift};
+    return IntRatio{.numerator = numerator,
+                    .log2_denominator = log2_denominator};
   }
 };
 
