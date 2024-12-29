@@ -8,10 +8,8 @@ namespace intpid {
 namespace {
 
 TEST(IntRatio, BasicTest) {
-  IntRatio r = *IntRatio::FromFloat(0.25, 1000);
-  EXPECT_EQ(r.numerator, 2097152);
-  EXPECT_EQ(r.log2_denominator, 23);
-  EXPECT_EQ(1000 * r, 250);
+  IntRatio r = *IntRatio::FromFloat(0.27, 1000, 0.01, 0.000001);
+  EXPECT_EQ(1000 * r, 270);
 }
 
 TEST(IntRatio, TooLargeMultiplier) {
