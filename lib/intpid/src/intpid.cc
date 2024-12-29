@@ -39,21 +39,18 @@ std::expected<Pid, std::string> Pid::Create(const Config& config) {
   const float kd =
       config.derivative_time <= 0 ? 0 : config.gain * config.derivative_time;
 
-  const float output_range = config.output_max - config.output_min;
-
-  // The integrator sum is clamped such that the integrator will never exceed
-  // the output range in a pi controller. The d term is expected to typically
-  // be relatively small and is thus is not considered in this calculation.
-  const float integrator_clamp = 2 * output_range * kp / ki;
-
   // Compute the maximum absolute error we can observe.
   const uint32_t max_abs_err =
       std::max<uint32_t>(config.setpoint_max - config.measurement_min,
                          config.measurement_max - config.setpoint_min);
-  const int32_t max_output_magnitude = std::max<int32_t>(
-      std::abs(config.output_min), std::abs(config.output_max));
 
-  const int32_t antiwindup_limit = max_output_magnitude * 2 / config.gain;
+  // The integrator sum is clamped to the value required to saturate the output
+  // (in either direction) assuming the proportional-only term is saturating the
+  // output in the opposite direction. (That is, twice the maximum output
+  // magnitude divided by the integral gain.)
+  const float max_output_magnitude =
+      std::max(std::abs(config.output_max), std::abs(config.output_min));
+  const float integrator_clamp = 2 * max_output_magnitude / ki;
 
   // Compute the IntRatios for kP, kI, and kD.
   IntRatio kpr, kir, kdr;
@@ -67,6 +64,9 @@ std::expected<Pid, std::string> Pid::Create(const Config& config) {
   } else {
     return std::unexpected(r.error() + "; while computing kI ratio");
   }
+  // The assumption here is that during a particular cycle the absolute maximum
+  // swing of the error is from maximum negative to maximum positive (i.e. 2x
+  // max_abs_err).
   if (auto r = IntRatio::FromFloat(kd, 2 * max_abs_err); r.has_value()) {
     kdr = *r;
   } else {
@@ -93,7 +93,7 @@ int32_t Pid::Update(int32_t setpoint, int32_t measurement, int32_t dt) {
   const int32_t err = setpoint - measurement;
   const int32_t raw_derr = err - prev_err_;
   prev_err_ = err;
-  derr_ = raw_derr * derr_a_ + derr_ * derr_1_minus_a_;
+  derr_ = raw_derr;
   integrator_ =
       std::clamp(integrator_ + err, -integrator_clamp_, integrator_clamp_);
   const int32_t p = kp_ * err;
