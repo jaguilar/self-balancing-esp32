@@ -109,7 +109,7 @@ int32_t Pid::Update(int32_t setpoint, int32_t measurement, int32_t dt) {
   sum_ = sum;
 #endif
 
-  return p + i + d;
+  return sum;
 }
 
 }  // namespace intpid

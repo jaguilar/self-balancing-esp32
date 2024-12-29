@@ -77,6 +77,9 @@ class WaterHeaterModel {
 TEST(IntPid, BasicTest) {
   constexpr int dt = 60;
 
+  FILE* f = fopen(R"(C:\Users\aguil\test.csv)", "w");
+  ASSERT_TRUE(f);
+
   WaterHeaterModel model(200'000, 20, 20, 10000);
   auto pid = intpid::Pid::Create(intpid::Config{.gain = 5,
                                                 .integral_time = 600,
@@ -104,11 +107,12 @@ TEST(IntPid, BasicTest) {
     model.set_power(power / 100.0f);
     model.Update(dt);
 
-    fprintf(stderr, "%s\n",
-            std::format("temp={} p={} i={} d={} sum={}", model.temp(), pid->p(),
-                        pid->i(), pid->d(), pid->p() + pid->i() + pid->d())
+    fprintf(f, "%s",
+            std::format("{},{},{},{},{},{},{}\n", t, model.setpoint(),
+                        model.temp(), pid->sum(), pid->p(), pid->i(), pid->d())
                 .c_str());
   }
+  fclose(f);
 }
 
 }  // namespace
