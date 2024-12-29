@@ -1,3 +1,6 @@
+#ifndef INTPID_INTRATIO_H
+#define INTPID_INTRATIO_H
+
 #include <cmath>
 #include <cstdint>
 #include <expected>
@@ -10,13 +13,22 @@ struct IntRatio {
   int32_t numerator;
   int32_t log2_denominator;
 
-  friend int32_t operator*(int32_t l, IntRatio r) {
-    return l * r.numerator >> r.log2_denominator;
+  template <typename N>
+  friend N operator*(N l, IntRatio r) {
+    return static_cast<int32_t>(l) * r.numerator >> r.log2_denominator;
+  }
+
+  template <typename N>
+  friend N operator*(IntRatio r, N l) {
+    return l * r;
   }
 
   static std::expected<IntRatio, std::string> FromFloat(
       float value, int32_t max_input, float max_error = 0.01f) {
-    if (value <= 0) {
+    if (value == 0) {
+      return IntRatio{.numerator = 0, .log2_denominator = 0};
+    }
+    if (value < 0) {
       return std::unexpected(
           std::format("Value must be positive: {}\n", value));
     }
@@ -54,3 +66,5 @@ struct IntRatio {
 };
 
 }  // namespace intpid
+
+#endif  // INTPID_INTRATIO_H
