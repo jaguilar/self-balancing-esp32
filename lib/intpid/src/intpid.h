@@ -5,9 +5,9 @@
 #include <memory>
 #include <string>
 
-namespace intpid {
+#include "intratio.h"
 
-#if 0
+namespace intpid {
 
 struct Config {
   // Also known as kP. If integral_time and derivative_time are zero, update
@@ -16,10 +16,14 @@ struct Config {
 
   // The integral time is the duration after which the integral term would be
   // as large as the proportional term for a fixed error value.
+  //
+  // If the value is zero or less, the integral term is not used.
   float integral_time;
 
   // Given a fixed rate of change in the error (derr), starting from zero, how
   // long take for gain * err to equal kD * derr?
+  //
+  // If the value is zero or less, the derivate term is not used.
   float derivative_time;
 
   // The minimum and maximum setpoint.
@@ -46,13 +50,16 @@ class Pid {
 
  private:
   Pid(IntRatio kp, IntRatio ki, IntRatio kd, IntRatio derr_a,
-      IntRatio derr_1_minus_a, int32_t integrator_clamp)
+      IntRatio derr_1_minus_a, int32_t integrator_clamp, int32_t output_min,
+      int32_t output_max)
       : kp_(kp),
         ki_(ki),
         kd_(kd),
         derr_a_(derr_a),
         derr_1_minus_a_(derr_1_minus_a),
-        integrator_clamp_(integrator_clamp) {}
+        integrator_clamp_(integrator_clamp),
+        output_min_(output_min),
+        output_max_(output_max) {}
 
   struct ErrorInfo {
     int32_t err;
@@ -62,14 +69,37 @@ class Pid {
   const IntRatio kp_, ki_, kd_;
   const IntRatio derr_a_, derr_1_minus_a_;
   const int32_t integrator_clamp_;
+  const int32_t output_min_, output_max_;
 
   int32_t integrator_ = 0;
   int32_t prev_err_ = 0;
 
   // derr_ is a smoothed view of the derror term.
   int32_t derr_ = 0;
-};
 
+#if INTPID_SUPPRESS_LOGGING == 0
+ public:
+  // If logging is enabled, we record the values we saw for the
+  // setpoint, measurement, and the calculated P I and D terms.
+  // We also expose the state of the integrator and derr.
+  // These values are for testing only.
+  int32_t setpoint() const { return setpoint_; }
+  int32_t measurement() const { return measurement_; }
+  int32_t p() const { return p_; }
+  int32_t i() const { return i_; }
+  int32_t d() const { return d_; }
+  int32_t derr() const { return derr_; }
+  int32_t integrator() const { return integrator_; }
+  int32_t sum() const { return sum_; }
+
+ private:
+  int32_t setpoint_ = 0;
+  int32_t measurement_ = 0;
+  int32_t p_ = 0;
+  int32_t i_ = 0;
+  int32_t d_ = 0;
+  int32_t sum_ = 0;
 #endif
+};
 
 }  // namespace intpid

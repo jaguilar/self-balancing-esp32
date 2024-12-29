@@ -23,7 +23,6 @@
 
 namespace intpid {
 
-#if 0
 template <typename... Args>
 void PidVLog(const char* format, Args&&... args) {
 #ifdef ARDUINO_ARCH_ESP32
@@ -35,8 +34,10 @@ void PidVLog(const char* format, Args&&... args) {
 
 std::expected<Pid, std::string> Pid::Create(const Config& config) {
   const float kp = config.gain;
-  const float ki = config.gain / config.integral_time;
-  const float kd = config.gain * config.derivative_time;
+  const float ki =
+      config.integral_time <= 0 ? 0 : config.gain / config.integral_time;
+  const float kd =
+      config.derivative_time <= 0 ? 0 : config.gain * config.derivative_time;
 
   const float output_range = config.output_max - config.output_min;
 
@@ -59,48 +60,56 @@ std::expected<Pid, std::string> Pid::Create(const Config& config) {
   if (auto r = IntRatio::FromFloat(kp, max_abs_err); r.has_value()) {
     kpr = *r;
   } else {
-    return std::unexpected<std::string>(r.error() +
-                                        "; while computing kP ratio");
+    return std::unexpected(r.error() + "; while computing kP ratio");
   }
   if (auto r = IntRatio::FromFloat(ki, integrator_clamp); r.has_value()) {
     kir = *r;
   } else {
-    return std::unexpected<std::string>(r.error() +
-                                        "; while computing kI ratio");
+    return std::unexpected(r.error() + "; while computing kI ratio");
   }
   if (auto r = IntRatio::FromFloat(kd, 2 * max_abs_err); r.has_value()) {
     kdr = *r;
   } else {
-    return std::unexpected<std::string>(r.error() +
-                                        "; while computing kD ratio");
+    return std::unexpected(r.error() + "; while computing kD ratio");
   }
-  float a = 0.3;
+  constexpr float a = 0.3;
   IntRatio derr_a, derr_1_minus_a;
   if (auto r = IntRatio::FromFloat(a, max_abs_err); r.has_value()) {
     derr_a = *r;
   } else {
-    return std::unexpected<std::string>(r.error() + "; while computing derr_a");
+    return std::unexpected(r.error() + "; while computing derr_a");
   }
   if (auto r = IntRatio::FromFloat(1 - a, max_abs_err); r.has_value()) {
     derr_1_minus_a = *r;
   } else {
-    return std::unexpected<std::string>(r.error() + "; while computing derr_a");
+    return std::unexpected(r.error() + "; while computing derr_a");
   }
 
-  return Pid(kpr, kir, kdr, derr_a, derr_1_minus_a, integrator_clamp);
+  return Pid(kpr, kir, kdr, derr_a, derr_1_minus_a, integrator_clamp,
+             config.output_min, config.output_max);
 }
 
 int32_t Pid::Update(int32_t setpoint, int32_t measurement, int32_t dt) {
-  const int32_t err = measurement - setpoint;
+  const int32_t err = setpoint - measurement;
   const int32_t raw_derr = err - prev_err_;
   prev_err_ = err;
   derr_ = raw_derr * derr_a_ + derr_ * derr_1_minus_a_;
   integrator_ =
       std::clamp(integrator_ + err, -integrator_clamp_, integrator_clamp_);
-
-  return 0;
-}
-
+  const int32_t p = kp_ * err;
+  const int32_t i = ki_ * integrator_;
+  const int32_t d = kd_ * derr_;
+  const int32_t sum = std::clamp(p + i + d, output_min_, output_max_);
+#if INTPID_SUPPRESS_LOGGING == 0
+  setpoint_ = setpoint;
+  measurement_ = measurement;
+  p_ = p;
+  i_ = i;
+  d_ = d;
+  sum_ = sum;
 #endif
+
+  return sum;
+}
 
 }  // namespace intpid
