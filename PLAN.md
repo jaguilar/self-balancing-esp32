@@ -8,6 +8,7 @@ into tasks granular enough that each one might take an hour or two.
   * [X] Write and test PID class.
   * [ ] Write and test platform-agnostic teleplot client.
   * [ ] Write and test FeedbackMotor class that integrates sensor and motor.
+    * [ ] Design physical housing for FeedbackMotor testbench.
   * [ ] Write and test orientation sensing.
   * [ ] Write and test main control loop.
   * [ ] Write and test PS4 controller over BT.
