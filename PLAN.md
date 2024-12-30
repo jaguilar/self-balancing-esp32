@@ -10,7 +10,7 @@ into tasks granular enough that each one might take an hour or two.
   * [ ] Write and test FeedbackMotor class that integrates sensor and motor.
   * [ ] Write and test orientation sensing.
   * [ ] Write and test main control loop.
-  * [ ] Write and test PS4 control.
+  * [ ] Write and test PS4 controller over BT.
 * Hardware
   * [ ] Generate BOM for parts we won't manufacture and order them.
     * [ ] Wheels
