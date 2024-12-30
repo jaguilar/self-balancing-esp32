@@ -30,7 +30,7 @@ def recast_csv(data):
         time.append(int(row[0]))
         setpoint.append(float(row[1]))
         measurement.append(float(row[2]))
-        error.append(float(row[2]) - float(row[1]))
+        error.append(float(row[1]) - float(row[2]))
         output.append(float(row[3]))
         p.append(float(row[4]))
         i.append(float(row[5]))
