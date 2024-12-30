@@ -46,17 +46,24 @@ class Pid {
  public:
   static std::expected<Pid, std::string> Create(const Config& config);
 
-  int32_t Update(int32_t setpoint, int32_t measurement, int32_t dt);
+  // Adjusts the setpoint. This must be called once before the first call
+  // to Update.
+  void set_setpoint(int32_t setpoint) {
+    const int32_t setpoint_diff = setpoint - setpoint_;
+    setpoint_ = setpoint;
+    // Prevent spikes in the d term by adjusting the previous error
+    // to reflect the new setpoint.
+    prev_err_ += setpoint_diff;
+  }
+
+  int32_t Update(int32_t measurement, int32_t dt);
 
  private:
-  Pid(IntRatio kp, IntRatio ki, IntRatio kd, IntRatio derr_a,
-      IntRatio derr_1_minus_a, int32_t integrator_clamp, int32_t output_min,
-      int32_t output_max)
+  Pid(IntRatio kp, IntRatio ki, IntRatio kd, int32_t integrator_clamp,
+      int32_t output_min, int32_t output_max)
       : kp_(kp),
         ki_(ki),
         kd_(kd),
-        derr_a_(derr_a),
-        derr_1_minus_a_(derr_1_minus_a),
         integrator_clamp_(integrator_clamp),
         output_min_(output_min),
         output_max_(output_max) {}
@@ -67,9 +74,10 @@ class Pid {
   };
 
   const IntRatio kp_, ki_, kd_;
-  const IntRatio derr_a_, derr_1_minus_a_;
   const int32_t integrator_clamp_;
   const int32_t output_min_, output_max_;
+
+  int32_t setpoint_ = 0;
 
   int32_t integrator_ = 0;
   int32_t prev_err_ = 0;
@@ -93,7 +101,6 @@ class Pid {
   int32_t sum() const { return sum_; }
 
  private:
-  int32_t setpoint_ = 0;
   int32_t measurement_ = 0;
   int32_t p_ = 0;
   int32_t i_ = 0;

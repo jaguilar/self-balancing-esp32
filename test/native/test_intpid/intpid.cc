@@ -80,7 +80,7 @@ TEST(IntPid, BasicTest) {
   FILE* f = fopen(R"(C:\Users\aguil\test.csv)", "w");
   ASSERT_TRUE(f);
 
-  WaterHeaterModel model(200'000, 20, 20, 10000);
+  WaterHeaterModel model(200'000, 20, 20, 11700);
   auto pid = intpid::Pid::Create(intpid::Config{.gain = 5,
                                                 .integral_time = 2000,
                                                 .derivative_time = 5,
@@ -96,14 +96,16 @@ TEST(IntPid, BasicTest) {
   for (int t = 0; t < 12 * 60 * 60; t += dt) {
     if (t > 4 * 60 * 60 && t < 5 * 60 * 60) {
       // One shower at about 75% hot water (160g/s water flow total).
-      model.set_flow_rate(120);
+      model.set_flow_rate(80);
+    } else if (t > 5 * 60 * 60 && t < 8 * 60 * 60) {
+      model.set_flow_rate(10);
     } else if (t > 8 * 60 * 60 && t < 9 * 60 * 60) {
       // Every shower in the house is on! Whoa!
-      model.set_flow_rate(4 * 120);
+      model.set_flow_rate(4 * 80);
     }
 
-    const int32_t power =
-        pid->Update(model.setpoint() * 10, model.temp() * 10, dt);
+    pid->set_setpoint(model.setpoint() * 10);
+    const int32_t power = pid->Update(model.temp() * 10, dt);
     model.set_power(power / 100.0f);
     model.Update(dt);
 

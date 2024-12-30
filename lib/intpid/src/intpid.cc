@@ -72,36 +72,35 @@ std::expected<Pid, std::string> Pid::Create(const Config& config) {
   } else {
     return std::unexpected(r.error() + "; while computing kD ratio");
   }
-  constexpr float a = 0.3;
-  IntRatio derr_a, derr_1_minus_a;
-  if (auto r = IntRatio::FromFloat(a, max_abs_err); r.has_value()) {
-    derr_a = *r;
-  } else {
-    return std::unexpected(r.error() + "; while computing derr_a");
-  }
-  if (auto r = IntRatio::FromFloat(1 - a, max_abs_err); r.has_value()) {
-    derr_1_minus_a = *r;
-  } else {
-    return std::unexpected(r.error() + "; while computing derr_a");
-  }
 
-  return Pid(kpr, kir, kdr, derr_a, derr_1_minus_a, integrator_clamp,
-             config.output_min, config.output_max);
+  Pid pid(kpr, kir, kdr, integrator_clamp, config.output_min,
+          config.output_max);
+  pid.set_setpoint((config.setpoint_min + config.setpoint_max) / 2);
+  return pid;
 }
 
-int32_t Pid::Update(int32_t setpoint, int32_t measurement, int32_t dt) {
-  const int32_t err = setpoint - measurement;
-  const int32_t raw_derr = err - prev_err_;
+int32_t Pid::Update(int32_t measurement, int32_t dt) {
+  const int32_t err = setpoint_ - measurement;
+  derr_ = err - prev_err_;
   prev_err_ = err;
-  derr_ = raw_derr;
-  integrator_ =
-      std::clamp(integrator_ + err, -integrator_clamp_, integrator_clamp_);
+
   const int32_t p = kp_ * err;
-  const int32_t i = ki_ * integrator_;
   const int32_t d = kd_ * derr_;
+  const int32_t pd = p + d;
+  const bool pd_saturated = pd > output_max_ || pd < output_min_;
+  if (!pd_saturated || (pd > 0) != (integrator_ > 0) || integrator_ == 0) {
+    // This follows two anti-windup rules:
+    // - If pd already saturates the output in the same direction as the
+    //   integrator, or if the integrator is zero, do not update the integrator.
+    // - The integrator is also restricted in the range of the
+    //   integrator_clamp_.
+    integrator_ =
+        std::clamp(integrator_ + err, -integrator_clamp_, integrator_clamp_);
+  }
+
+  const int32_t i = ki_ * integrator_;
   const int32_t sum = std::clamp(p + i + d, output_min_, output_max_);
 #if INTPID_SUPPRESS_LOGGING == 0
-  setpoint_ = setpoint;
   measurement_ = measurement;
   p_ = p;
   i_ = i;
