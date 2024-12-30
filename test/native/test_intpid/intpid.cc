@@ -82,7 +82,7 @@ TEST(IntPid, BasicTest) {
 
   WaterHeaterModel model(200'000, 20, 20, 10000);
   auto pid = intpid::Pid::Create(intpid::Config{.gain = 5,
-                                                .integral_time = 600,
+                                                .integral_time = 2000,
                                                 .derivative_time = 5,
                                                 .setpoint_min = 0,
                                                 .setpoint_max = 1000,
