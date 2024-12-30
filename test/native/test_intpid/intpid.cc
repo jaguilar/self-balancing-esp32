@@ -106,7 +106,7 @@ TEST(IntPid, BasicTest) {
 
     pid->set_setpoint(model.setpoint() * 10);
     const int32_t power = pid->Update(model.temp() * 10, dt);
-    model.set_power(power / 100.0f);
+    model.set_power(power / 100.0);
     model.Update(dt);
 
     fprintf(f, "%s",
