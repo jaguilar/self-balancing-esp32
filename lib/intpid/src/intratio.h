@@ -20,7 +20,7 @@ struct IntRatio {
   template <typename N>
   friend N operator*(N l, IntRatio r) {
 #ifndef NDEBUG
-    assert(std::abs(l) <= r.max_multiplier);
+    assert(r.numerator == 0 || std::abs(l) <= r.max_multiplier);
 #endif
     return static_cast<int32_t>(l) * r.numerator >> r.log2_denominator;
   }
@@ -30,6 +30,13 @@ struct IntRatio {
     return l * r;
   }
 
+  inline friend std::ostream& operator<<(std::ostream& o, IntRatio r) {
+    o << std::format("{} / (2^{}) ~= {}", r.numerator, r.log2_denominator,
+                     1.0 * r.numerator / (1 << r.log2_denominator));
+    return o;
+  }
+
+ public:
   // Creates an IntRatio from a float value to approximate.
   //
   // 'max_multiplier' is the maximum value you will multiply by
@@ -49,51 +56,73 @@ struct IntRatio {
     if (value == 0) {
       return IntRatio{.numerator = 0, .log2_denominator = 0};
     }
-    bool negate = value < 0;
-    if (negate) value = -value;
 
-    int i;
-    for (i = 0; i < 32; ++i) {
-      const float max_product =
-          static_cast<float>(max_multiplier) * value * (1 << i);
-      if (max_product >=
-          static_cast<float>(std::numeric_limits<int32_t>::max())) {
-        if (i == 0) {
-          return std::unexpected(
-              std::format("ratio * max_value too large : {}\n",
-                          static_cast<float>(max_multiplier) * value));
-        }
-        --i;  // This shift level was not acceptable. Go back one level.
+    const int32_t max_abs_numerator =
+        std::numeric_limits<int32_t>::max() / max_multiplier;
+
+    int32_t best_d = -1;
+    int32_t best_n = 0;
+    float best_approx = 0;
+    float best_error = 1;
+    for (int dp = 0; dp < 32; ++dp) {
+      const int32_t denominator = 1 << dp;
+      const float exact_numerator = value * denominator;
+      if (std::abs(exact_numerator) > max_abs_numerator) {
         break;
       }
-      // See if we've gotten the relative error low enough.
-      const int32_t log2_denominator = i;
-      const int32_t numerator =
-          std::round(value * (1 << log2_denominator) + 0.5);
-      const float ratio = 1.0 * numerator / (1 << log2_denominator);
-      const float error = std::abs(ratio - value) / value;
-      if (error < stop_error) {
+      const int32_t numerator = std::round(exact_numerator);
+      const float approx = 1.0 * numerator / denominator;
+      const float error = (approx - value) / std::abs(value);
+
+      bool is_better_error;
+      const float old_dist_from_zero = std::abs(best_error);
+      const bool old_acceptable = old_dist_from_zero <= max_error;
+      const float dist_from_zero = std::abs(error);
+      const bool new_acceptable = dist_from_zero <= max_error;
+      if (new_acceptable && error >= 0) {
+        // Acceptable positive errors replace any negative error or any error
+        // that is further from zero.
+        is_better_error = best_error < 0 || dist_from_zero < old_dist_from_zero;
+      } else if (new_acceptable && error < 0) {
+        // Negative errors replace unacceptable errors or other negative errors
+        // further from zero.
+        is_better_error =
+            !old_acceptable ||
+            (best_error < 0 && dist_from_zero < old_dist_from_zero);
+      } else {
+        // Unacceptable errors only replace errors further from zero.
+        is_better_error = dist_from_zero < old_dist_from_zero;
+      }
+
+      if (is_better_error) {
+        best_d = dp;
+        best_n = numerator;
+        best_error = error;
+        best_approx = approx;
+      }
+      if (best_error > 0 && std::abs(best_error) < stop_error) {
         break;
       }
     }
-    const int32_t log2_denominator = i;
-    const int32_t numerator = std::round(value * (1 << log2_denominator) + 0.5);
 
-    const float calculated_ratio =
-        static_cast<float>(numerator) / (1 << log2_denominator);
-    const float relative_error = std::abs(calculated_ratio - value) / value;
-    if (relative_error > max_error) {
+    if (best_error == 1) {
       return std::unexpected(
-          std::format("Cannot find ratio with low enough relative error: "
-                      "{} => ({} / (2^{})) ~= {} err={} max_err={}\n",
-                      value, numerator, log2_denominator, calculated_ratio,
-                      relative_error, max_error));
+          "Cannot find any suitable ratio since max_multiplier is too "
+          "large.\n");
     }
+    if (std::abs(best_error) > max_error) {
+      return std::unexpected(std::format(
+          "Cannot find ratio with low enough relative error. Best "
+          "approximation: "
+          "{} => ({} / (2^{})) ~= {} err={} max_err={}\n",
+          value, best_n, best_d, best_approx, best_error, max_error));
+    }
+
     return IntRatio{
-        .numerator = negate ? -numerator : numerator,
-        .log2_denominator = log2_denominator,
+        .numerator = best_n,
+        .log2_denominator = best_d,
 #ifndef NDEBUG
-        .max_multiplier = static_cast<uint32_t>(max_multiplier),
+        .max_multiplier = max_multiplier,
 #endif
     };
   }
