@@ -3,6 +3,22 @@
 Adafruit_MLX90393 sensor = Adafruit_MLX90393();
 #define MLX90393_CS 10
 
+double VectorToAngle(double x, double y) {
+  if (x == 0.0 && y == 0.0) {
+    return 0.0;  // Angle is undefined for the zero vector
+  } else if (x == 0.0 && y > 0.0) {
+    return 90.0;  // Angle is 90 degrees
+  } else if (x == 0.0 && y < 0.0) {
+    return 270.0;  // Angle is 270 degrees
+  }
+
+  double angle = atan2(y, x) * 180 / PI;
+  if (angle < 0) {
+    angle = 360 + angle;
+  }
+  return angle;
+}
+
 void setup(void) {
   Serial.begin(115200);
 
@@ -80,7 +96,9 @@ void loop(void) {
     Serial.print(z, 4);
     Serial.println(" uT");
 
-    Serial.printf(">X:%f\n>Y:%f\n>Z:%f\n", x, y, z);
+    Serial.printf(">X:%f\n>Y:%f\n>Z:%f\n>ANGLE:%f\n", x, y, z,
+                  VectorToAngle(x, y));
+
   } else {
     Serial.println("Unable to read XYZ data from the sensor.");
   }
