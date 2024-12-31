@@ -5,6 +5,8 @@ into tasks granular enough that each one might take an hour or two.
 
 * Software
   * [ ] Write and test magnetometer-sensor-based motor::Sensor class.
+    * [X] Get sensor angle detection working and verify it is adequately 
+          sensitive.
   * [X] Write and test PID class.
   * [ ] Write and test platform-agnostic teleplot client.
   * [ ] Write and test FeedbackMotor class that integrates sensor and motor.
