@@ -1,13 +1,9 @@
-#include <Wire.h>
-
 #include "Adafruit_MLX90393.h"
-#include "intpid.h"
 
 Adafruit_MLX90393 sensor = Adafruit_MLX90393();
 #define MLX90393_CS 10
 
 void setup(void) {
-  Wire.setPins(5, 4);
   Serial.begin(115200);
 
   /* Wait for serial on USB platforms. */
@@ -16,6 +12,8 @@ void setup(void) {
   }
 
   Serial.println("Starting Adafruit MLX90393 Demo");
+
+  Wire.setPins(4, 5);
 
   // hardware I2C mode, can pass in address & alt Wire
   while (!sensor.begin_I2C(0x18)) {
