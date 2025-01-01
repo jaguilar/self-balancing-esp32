@@ -99,25 +99,6 @@ void setup(void) {
 void loop(void) {
   float x, y, z;
 
-  // get X Y and Z data at once
-#if 0
-  if (sensor.readMeasurement(&x, &y, &z)) {
-    Serial.print("X: ");
-    Serial.print(x, 4);
-    Serial.println(" uT");
-    Serial.print("Y: ");
-    Serial.print(y, 4);
-    Serial.println(" uT");
-    Serial.print("Z: ");
-    Serial.print(z, 4);
-    Serial.println(" uT");
-
-    Serial.printf(">X:%f\n>Y:%f\n>Z:%f\n>ANGLE:%f\n", x, y, z,
-                  VectorToAngle(x, y));
-  } else {
-    Serial.println("Unable to read XYZ data from the sensor.");
-  }
-#endif
   std::array<float, 2> xy_result;
   if (sensor.readMeasurement(MLX90393_X | MLX90393_Y, xy_result)) {
     Serial.printf(">XX:%f\n>YY:%f\n", xy_result[0], xy_result[1]);
