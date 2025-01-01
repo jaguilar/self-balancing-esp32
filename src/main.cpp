@@ -19,6 +19,8 @@ double VectorToAngle(double x, double y) {
   return angle;
 }
 
+constexpr uint8_t i2c_addr = 0x18;
+
 void setup(void) {
   Serial.begin(115200);
 
@@ -32,7 +34,7 @@ void setup(void) {
   Wire.setPins(4, 5);
 
   // hardware I2C mode, can pass in address & alt Wire
-  while (!sensor.begin_I2C(0x18)) {
+  while (!sensor.begin_I2C(i2c_addr)) {
     // if (! sensor.begin_SPI(MLX90393_CS)) {  // hardware SPI mode
     Serial.println("No sensor found ... check your wiring?");
     delay(5000);
@@ -79,13 +81,27 @@ void setup(void) {
 
   // Set digital filtering
   sensor.setFilter(MLX90393_FILTER_5);
+
+  sensor.setTrigInt(true);
+
+  if (!sensor.exitMode()) {
+    Serial.print("Failed to exit mode.");
+  }
+
+  if (!sensor.setBurstRate(0)) {
+    Serial.println("Failed to set burst rate");
+  };
+  if (!sensor.startBurstMode(MLX90393_X | MLX90393_Y | MLX90393_Z)) {
+    Serial.println("Failed to start burst mode");
+  }
 }
 
 void loop(void) {
   float x, y, z;
 
   // get X Y and Z data at once
-  if (sensor.readData(&x, &y, &z)) {
+#if 0
+  if (sensor.readMeasurement(&x, &y, &z)) {
     Serial.print("X: ");
     Serial.print(x, 4);
     Serial.println(" uT");
@@ -98,22 +114,14 @@ void loop(void) {
 
     Serial.printf(">X:%f\n>Y:%f\n>Z:%f\n>ANGLE:%f\n", x, y, z,
                   VectorToAngle(x, y));
-
   } else {
     Serial.println("Unable to read XYZ data from the sensor.");
   }
+#endif
+  std::array<float, 2> xy_result;
+  if (sensor.readMeasurement(MLX90393_X | MLX90393_Y, xy_result)) {
+    Serial.printf(">XX:%f\n>YY:%f\n", xy_result[0], xy_result[1]);
+  }
 
-  /* Or....get a new sensor event, normalized to uTesla */
-  sensors_event_t event;
-  sensor.getEvent(&event);
-  /* Display the results (magnetic field is measured in uTesla) */
-  Serial.print("X: ");
-  Serial.print(event.magnetic.x);
-  Serial.print(" \tY: ");
-  Serial.print(event.magnetic.y);
-  Serial.print(" \tZ: ");
-  Serial.print(event.magnetic.z);
-  Serial.println(" uTesla ");
-
-  delay(500);
+  delay(20);
 }
