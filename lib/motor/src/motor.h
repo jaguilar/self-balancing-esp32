@@ -5,22 +5,22 @@
 
 namespace motor {
 
+enum StopMode {
+  kBrake,  // If the motor controller has a short brake mode, apply it.
+  kCoast,  // Don't apply extra stopping force.
+};
+
+enum Direction {
+  kClockwise,
+  kCounterClockwise,
+};
+
 class Motor {
  public:
   virtual ~Motor() {}
 
-  enum StopMode {
-    kBrake,  // If the motor controller has a short brake mode, apply it.
-    kCoast,  // Don't apply extra stopping force.
-  };
-
   // Stops the motor.
   virtual void Stop(StopMode mode = kCoast) = 0;
-
-  enum Direction {
-    kClockwise,
-    kCounterClockwise,
-  };
 
   // Sets the motor direction.
   virtual void SetDirection(Direction direction) = 0;
