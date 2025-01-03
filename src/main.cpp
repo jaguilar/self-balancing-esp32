@@ -1,6 +1,15 @@
 #include "Adafruit_MLX90393.h"
+#include "mlx90393_sensor.h"
+#include "three_wire_motor.h"
+
+constexpr int pin_pwma = 0;
+constexpr int pin_ain1 = 1;
+constexpr int pin_ain2 = 8;
 
 Adafruit_MLX90393 sensor = Adafruit_MLX90393();
+motor::MLX90393Sensor motor_sensor(&sensor);
+motor::ThreeWireMotor motor1(pin_pwma, pin_ain1, pin_ain2);
+
 #define MLX90393_CS 10
 
 double VectorToAngle(double x, double y) {
@@ -22,6 +31,34 @@ double VectorToAngle(double x, double y) {
 constexpr uint8_t i2c_addr = 0x18;
 
 void setup(void) {
+  analogWriteFrequency(pin_pwma, 128);
+  analogWriteResolution(pin_pwma, 8);
+
+  motor1.Begin();
+
+  xTaskCreate(
+      +[](void*) {
+        motor::Direction direction = motor::kClockwise;
+        motor::Direction other_direction = motor::kCounterClockwise;
+
+        while (true) {
+          delay(1000);
+          motor1.SetDirection(direction);
+          delay(1000);
+          motor1.SetDuty(256 * 0.5);
+          delay(1000);
+          motor1.SetDuty(256 * 0.75);
+          delay(1000);
+          motor1.SetDuty(256 * 1);
+          delay(1000);
+          motor1.Stop(motor::kBrake);
+          delay(500);
+          motor1.Stop(motor::kCoast);
+          std::swap(direction, other_direction);
+        }
+      },
+      "motor", 1024, NULL, 1, NULL);
+
   Serial.begin(115200);
 
   /* Wait for serial on USB platforms. */
@@ -77,10 +114,10 @@ void setup(void) {
   sensor.setResolution(MLX90393_Z, MLX90393_RES_16);
 
   // Set oversampling
-  sensor.setOversampling(MLX90393_OSR_3);
+  sensor.setOversampling(MLX90393_OSR_2);
 
   // Set digital filtering
-  sensor.setFilter(MLX90393_FILTER_5);
+  sensor.setFilter(MLX90393_FILTER_3);
 
   sensor.setTrigInt(true);
 
@@ -91,18 +128,17 @@ void setup(void) {
   if (!sensor.setBurstRate(0)) {
     Serial.println("Failed to set burst rate");
   };
-  if (!sensor.startBurstMode(MLX90393_X | MLX90393_Y | MLX90393_Z)) {
+
+  if (!sensor.startBurstMode(MLX90393_X | MLX90393_Y)) {
     Serial.println("Failed to start burst mode");
   }
 }
 
 void loop(void) {
-  float x, y, z;
+  motor_sensor.Update();
 
-  std::array<float, 2> xy_result;
-  if (sensor.readMeasurement(MLX90393_X | MLX90393_Y, xy_result)) {
-    Serial.printf(">XX:%f\n>YY:%f\n", xy_result[0], xy_result[1]);
-  }
+  Serial.printf(">ANGLE:%d\n>SPEED:%d\n", motor_sensor.angle(),
+                motor_sensor.rate());
 
-  delay(20);
+  delay(10);
 }
