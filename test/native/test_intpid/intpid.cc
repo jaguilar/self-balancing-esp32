@@ -84,17 +84,9 @@ TEST(IntPid, BasicTest) {
   ASSERT_TRUE(f);
 
   WaterHeaterModel model(200'000, 20, 20, 11700);
-  auto pid = intpid::Pid::Create(intpid::Config{.gain = 15,
-                                                .integral_time = 85,
-                                                .derivative_time = 7,
-                                                .setpoint_min = 0,
-                                                .setpoint_max = 100,
-                                                .measurement_min = 0,
-                                                .measurement_max = 100,
-                                                .output_min = 0,
-                                                .output_max = 100,
-                                                .timestep_max = 60});
-  ASSERT_TRUE(pid) << pid.error();
+  auto pid = *intpid::Pid::Create(intpid::Config{
+      .kp = 15., .ki = .002, .kd = 75, .output_min = 0, .output_max = 100});
+  pid.Update(model.temp(), 0);
 
   for (int t = 0; t < 12 * 60 * 60; t += dt) {
     if (t > 4 * 60 * 60 && t < 5 * 60 * 60) {
@@ -105,17 +97,19 @@ TEST(IntPid, BasicTest) {
     } else if (t > 8 * 60 * 60 && t < 9 * 60 * 60) {
       // Every shower in the house is on! Whoa!
       model.set_flow_rate(4 * 80);
+    } else if (t > 9 * 60 * 60) {
+      model.set_flow_rate(0);
     }
 
-    pid->set_setpoint(model.setpoint());
-    const auto power = pid->Update(model.temp(), dt);
+    pid.set_setpoint(model.setpoint());
+    const auto power = pid.Update(model.temp(), dt);
     model.set_power(float{power} / 100.0);
     model.Update(dt);
 
     fprintf(f, "%s",
             std::format("{},{},{},{},{},{},{}\n", t, model.setpoint(),
-                        model.temp(), float{pid->sum()}, float{pid->p()},
-                        float{pid->i()}, float{pid->d()})
+                        model.temp(), float{pid.sum()}, float{pid.p()},
+                        float{pid.i()}, float{pid.d()})
                 .c_str());
   }
   fclose(f);

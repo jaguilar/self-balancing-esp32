@@ -12,30 +12,34 @@
 
 namespace intpid {
 
+// Since this pid controller uses fixed point under the covers, it is important
+// to keep the output within the range of the underlying type. In this case,
+// that means your output should be centered somewhere near zero, and have an
+// absolute value of 2^14-1 (which is 16383). On the other hand, be careful to
+// stay away from outputs so small they require more than 13-14 bits of
+// precision.
 struct Config {
-  // Also known as kP. If integral_time and derivative_time are zero, update
-  // will return gain * (setpoint - measurement).
-  float gain;
+  // Each update, we multiply the error by this number and add it to the output
+  // signal.
+  float kp;
 
-  // The integral time is the duration after which the integral term would be
-  // as large as the proportional term for a fixed error value.
+  // Each update, we multiply the accumulated error * time by this number and
+  // add it to the output signal. The error is accumulated only when the output
+  // is not saturated by the P and D terms.
   //
-  // If the value is zero or less, the integral term is not used.
-  float integral_time;
+  // Hint: if this number is equal to kp, then if the error is constant for one
+  // tick, the I term will be equal to the P term. If it's 1/10 of kp, then
+  // it will take ten ticks before I = P.
+  float ki;
 
-  // Given a fixed rate of change in the error (derr), starting from zero, how
-  // long take for gain * err to equal kD * derr?
+  // Each update, we multiply the rate of change in the error by this number
+  // and add it to the output signal.
   //
-  // If the value is zero or less, the derivate term is not used.
-  float derivative_time;
-
-  // The minimum and maximum setpoint.
-  float setpoint_min;
-  float setpoint_max;
-
-  // The minimum and maximum measurements we will observe.
-  float measurement_min;
-  float measurement_max;
+  // Hint: if this number is equal to kp, then if the error is changing at rate
+  // X/tick, and the current error is also X, then the D term will equal the P
+  // term. If this is 1/10th of kp, then the change in error has to be 10X/tick
+  // before D = P.
+  float kd;
 
   // The minimum and maximum outputs.
   float output_min;
@@ -51,13 +55,7 @@ class Pid {
 
   // Adjusts the setpoint. This must be called once before the first call
   // to Update.
-  void set_setpoint(SQ15x16 setpoint) {
-    const SQ15x16 setpoint_diff = setpoint - setpoint_;
-    setpoint_ = setpoint;
-    // Prevent spikes in the d term by adjusting the previous error
-    // to reflect the new setpoint.
-    prev_err_ += setpoint_diff;
-  }
+  void set_setpoint(SQ15x16 setpoint) { setpoint_ = setpoint; }
 
   // Updates the PID controller with feedback and returns the new output value.
   // dt is unitless -- it just needs to be consistent with the unit for
@@ -65,19 +63,27 @@ class Pid {
   SQ15x16 Update(SQ15x16 measurement, SQ15x16 dt);
 
  private:
-  Pid(SQ15x16 kp, SQ15x16 ki, SQ15x16 kd, SQ15x16 integrator_clamp,
-      SQ15x16 output_min, SQ15x16 output_max)
-      : kp_(kp),
-        ki_(ki),
-        kd_(kd),
-        integrator_clamp_(integrator_clamp),
-        output_min_(output_min),
-        output_max_(output_max) {}
+  Pid(const Config& config)
+      : kp_(config.kp),
+        ki_(config.ki),
+        kd_(config.kd),
+        output_min_(config.output_min),
+        output_max_(config.output_max),
+        integrator_lower_cutoff_(output_min_ -
+                                 .25 * (output_max_ - output_min_)),
+        integrator_upper_cutoff_(output_max_ +
+                                 .25 * (output_max_ - output_min_)) {}
 
-  struct ErrorInfo {
-    SQ15x16 err;
-    SQ15x16 derr;
-  };
+  static SQ15x16 MaxI(SQ15x16 output_min, SQ15x16 output_max) {
+    const auto range = output_max - output_min;
+    const auto absmin = absFixed(output_min);
+    const auto absmax = absFixed(output_max);
+    // We only have an offset from zero if our output does not include zero in
+    // its range.
+    const bool has_offset = output_min > 0 == output_max != 0;
+    const auto offset = absmin > absmax ? absmin : absmax;
+    return 2 * (range + (has_offset ? offset : 0));
+  }
 
   const SQ15x16 kp_, ki_, kd_;
   const SQ15x16 integrator_clamp_;
@@ -85,10 +91,18 @@ class Pid {
 
   SQ15x16 setpoint_ = 0;
 
-  SQ15x16 integrator_ = 0;
-  SQ15x16 prev_err_ = 0;
+  // Note: unlike other PID controller implementations I've seen, we multiply
+  // the error * time by ki before adding it to i_sum_. This means that it's
+  // easy to clamp the integrator to the desired range without the risk of
+  // overflow (that range being 2x the output range).
+  SQ15x16 i_sum_ = 0;
 
-  // derr_ is a smoothed view of the derror term.
+  // If the raw output is outside of this range, the integrator term is reduced
+  // until the raw output would be at the edge of the range.
+  const SQ15x16 integrator_lower_cutoff_;
+  const SQ15x16 integrator_upper_cutoff_;
+
+  SQ15x16 prev_measurement_ = 0;
   SQ15x16 derr_ = 0;
 
 #if INTPID_SUPPRESS_LOGGING == 0
@@ -103,7 +117,6 @@ class Pid {
   SQ15x16 i() const { return i_; }
   SQ15x16 d() const { return d_; }
   SQ15x16 derr() const { return derr_; }
-  SQ15x16 integrator() const { return integrator_; }
   SQ15x16 sum() const { return sum_; }
 
  private:
