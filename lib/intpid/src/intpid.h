@@ -40,9 +40,6 @@ struct Config {
   // The minimum and maximum outputs.
   float output_min;
   float output_max;
-
-  // The maximum dt that will be passed to update.
-  float timestep_max;
 };
 
 class Pid {
