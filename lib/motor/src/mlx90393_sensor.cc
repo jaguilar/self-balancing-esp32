@@ -29,37 +29,28 @@ bool MLX90393Sensor::Update() {
 
   // Note we only update sample time when we can successfully take a sample.
   const uint64_t t = micros();
-  const int dt = t - t_;
+  const SQ15x16 dt_ms = SQ15x16{SFixed<24, 4>{t - t_} / 1'000};
   t_ = t;
 
   const SQ15x16 newangle = VectorToAngleDecidegrees(data[0], data[1]);
   const SQ15x16 delta = newangle - rawangle_;
   rawangle_ = newangle;
 
+  SQ15x16 corrected_delta;
   if (absFixed(delta) < 180) {
     // If the delta was less than 180, we'll assume that it's a normal move --
     // that is, the sensor did not wrap around.
-    speed_ = delta;
+    corrected_delta = delta;
   } else {
     // If the move was more than 180 degrees, we assume that we've wrapped
     // around. That means the *sign* of the move is the opposite delta, and the
     // magnitude is 360 - abs(delta).
-    speed_ = (delta > 0 ? -360 + delta : 360 + delta);
+    corrected_delta = (delta > 0 ? -360 + delta : 360 + delta);
   }
 
   // Since we want to accumulate the total angle, we add the adjusted delta.
-  angle_ += speed_;
-
-  // To arrive at turning rate per second, we need to divide by seconds. We
-  // don't want to use floating point. We could multiply by 1'000'000 then
-  // divide by dt, but that might overflow int32_t if the angle change was more
-  // than 400 degrees (e.g. if there is a really slow sampling rate).
-  //
-  // To avoid this overflow we can divide by the numerator and the denominator
-  // by the same amount. This means we'd now need to rotate by 400 * 2^N degrees
-  // on one updated. We lose the lower N bits of dt, but it's so high resolution
-  // that we don't really care.
-  speed_ /= dt;
+  angle_ += corrected_delta;
+  speed_ = corrected_delta * dt_ms;
 
   return true;
 }
