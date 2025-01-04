@@ -5,7 +5,7 @@
 
 namespace motor {
 
-SQ15x16 VectorToAngleDecidegrees(SQ15x16 x, SQ15x16 y) {
+SQ15x16 VectorToAngleDecidegrees(float x, float y) {
   if (x == 0.0 && y == 0.0) {
     return 0;  // Angle is undefined for the zero vector
   } else if (x == 0.0 && y > 0.0) {

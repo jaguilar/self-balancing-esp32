@@ -137,8 +137,8 @@ void setup(void) {
 void loop(void) {
   motor_sensor.Update();
 
-  Serial.printf(">ANGLE:%d\n>SPEED:%d\n", motor_sensor.angle(),
-                motor_sensor.rate());
+  Serial.printf(">ANGLE:%d\n>SPEED:%d\n", float{motor_sensor.angle()},
+                float{motor_sensor.rate()});
 
   delay(10);
 }
