@@ -59,6 +59,9 @@ class Pid {
     prev_err_ += setpoint_diff;
   }
 
+  // Updates the PID controller with feedback and returns the new output value.
+  // dt is unitless -- it just needs to be consistent with the unit for
+  // integral_time and derivative_time.
   SQ15x16 Update(SQ15x16 measurement, SQ15x16 dt);
 
  private:
