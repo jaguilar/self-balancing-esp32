@@ -4,9 +4,8 @@
 #include <cassert>
 #include <cstdint>
 #include <expected>
+#include <format>
 #include <limits>
-
-#include "intratio.h"
 
 #ifdef ARDUINO_ARCH_ESP32
 #include <esp_log.h>
@@ -40,53 +39,42 @@ std::expected<Pid, std::string> Pid::Create(const Config& config) {
       config.derivative_time <= 0 ? 0 : config.gain * config.derivative_time;
 
   // Compute the maximum absolute error we can observe.
-  const uint32_t max_abs_err =
-      std::max<uint32_t>(config.setpoint_max - config.measurement_min,
-                         config.measurement_max - config.setpoint_min);
+  const float max_abs_err =
+      std::abs(std::max<float>(config.setpoint_max - config.measurement_min,
+                               config.measurement_max - config.setpoint_min));
 
   // The integrator sum is clamped to the value required to saturate the output
   // (in either direction) assuming the proportional-only term is saturating the
   // output in the opposite direction. (That is, twice the maximum output
   // magnitude divided by the integral gain.)
-  const float max_output_magnitude =
-      std::max(std::abs(config.output_max), std::abs(config.output_min));
-  const float integrator_clamp = 2 * max_output_magnitude / ki;
-
-  // Compute the IntRatios for kP, kI, and kD.
-  IntRatio kpr, kir, kdr;
-  if (auto r = IntRatio::FromFloat(kp, max_abs_err); r.has_value()) {
-    kpr = *r;
-  } else {
-    return std::unexpected(r.error() + "; while computing kP ratio");
-  }
-  if (auto r = IntRatio::FromFloat(ki, integrator_clamp); r.has_value()) {
-    kir = *r;
-  } else {
-    return std::unexpected(r.error() + "; while computing kI ratio");
-  }
-  // The assumption here is that during a particular cycle the absolute maximum
-  // swing of the error is from maximum negative to maximum positive (i.e. 2x
-  // max_abs_err).
-  if (auto r = IntRatio::FromFloat(kd, 2 * max_abs_err); r.has_value()) {
-    kdr = *r;
-  } else {
-    return std::unexpected(r.error() + "; while computing kD ratio");
+  const float max_output_magnitude = std::max<float>(
+      std::abs((config.output_max)), (std::abs(config.output_min)));
+  float integrator_clamp = 2 * max_output_magnitude / ki;
+  printf("%f\n", integrator_clamp);
+  if (integrator_clamp > SQ15x16::MaxValue.getInteger()) {
+    integrator_clamp = SQ15x16::MaxValue.getInteger();
+    printf("%f\n", integrator_clamp);
   }
 
-  Pid pid(kpr, kir, kdr, integrator_clamp, config.output_min,
-          config.output_max);
+  // Serial.println(
+  //     std::format("kp:{} ki:{} kd:{} max_abs_err:{} integrator_clamp:{}", kp,
+  //                 ki, kd, max_abs_err, integrator_clamp)
+  //         .c_str());
+
+  Pid pid(kp, ki, kd, integrator_clamp, config.output_min, config.output_max);
   pid.set_setpoint((config.setpoint_min + config.setpoint_max) / 2);
   return pid;
 }
 
-int32_t Pid::Update(int32_t measurement, int32_t dt) {
-  const int32_t err = setpoint_ - measurement;
+SQ15x16 Pid::Update(SQ15x16 measurement, SQ15x16 dt) {
+  const SQ15x16 err = setpoint_ - measurement;
   derr_ = err - prev_err_;
+  // Serial.printf(">DERR:%d\n");
   prev_err_ = err;
 
-  const int32_t p = kp_ * err;
-  const int32_t d = kd_ * derr_;
-  const int32_t pd = p + d;
+  const SQ15x16 p = kp_ * err;
+  const SQ15x16 d = kd_ * derr_;
+  const SQ15x16 pd = p + d;
   const bool pd_saturated = pd > output_max_ || pd < output_min_;
   if (!pd_saturated || (pd > 0) != (integrator_ > 0) || integrator_ == 0) {
     // This follows two anti-windup rules:
@@ -94,12 +82,20 @@ int32_t Pid::Update(int32_t measurement, int32_t dt) {
     //   integrator, or if the integrator is zero, do not update the integrator.
     // - The integrator is also restricted in the range of the
     //   integrator_clamp_.
+    printf("%s", std::format("{} += {} (limited to {})\n", float{integrator_},
+                             float{err}, float{integrator_clamp_})
+                     .c_str());
     integrator_ =
         std::clamp(integrator_ + err, -integrator_clamp_, integrator_clamp_);
+
+  } else {
+    printf("%s", std::format("skipping integrator {} {} {}\n", float{pd},
+                             float{integrator_}, float{err})
+                     .c_str());
   }
 
-  const int32_t i = ki_ * integrator_;
-  const int32_t sum = std::clamp(p + i + d, output_min_, output_max_);
+  const SQ15x16 i = ki_ * integrator_;
+  const SQ15x16 sum = std::clamp(p + i + d, output_min_, output_max_);
 #if INTPID_SUPPRESS_LOGGING == 0
   measurement_ = measurement;
   p_ = p;

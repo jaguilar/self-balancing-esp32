@@ -3,7 +3,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "intratio.h"
+#include <format>
 
 namespace intpid {
 namespace {
@@ -75,19 +75,22 @@ class WaterHeaterModel {
 };
 
 TEST(IntPid, BasicTest) {
+#ifdef ARDUINO
+  GTEST_SKIP();
+#endif
   constexpr int dt = 60;
 
-  FILE* f = fopen(R"(C:\Users\aguil\test.csv)", "w");
+  FILE* f = fopen("/tmp/test.csv", "w");
   ASSERT_TRUE(f);
 
   WaterHeaterModel model(200'000, 20, 20, 11700);
-  auto pid = intpid::Pid::Create(intpid::Config{.gain = 5,
-                                                .integral_time = 2000,
-                                                .derivative_time = 5,
+  auto pid = intpid::Pid::Create(intpid::Config{.gain = 15,
+                                                .integral_time = 85,
+                                                .derivative_time = 7,
                                                 .setpoint_min = 0,
-                                                .setpoint_max = 1000,
+                                                .setpoint_max = 100,
                                                 .measurement_min = 0,
-                                                .measurement_max = 1000,
+                                                .measurement_max = 100,
                                                 .output_min = 0,
                                                 .output_max = 100,
                                                 .timestep_max = 60});
@@ -104,14 +107,15 @@ TEST(IntPid, BasicTest) {
       model.set_flow_rate(4 * 80);
     }
 
-    pid->set_setpoint(model.setpoint() * 10);
-    const int32_t power = pid->Update(model.temp() * 10, dt);
-    model.set_power(power / 100.0);
+    pid->set_setpoint(model.setpoint());
+    const auto power = pid->Update(model.temp(), dt);
+    model.set_power(float{power} / 100.0);
     model.Update(dt);
 
     fprintf(f, "%s",
             std::format("{},{},{},{},{},{},{}\n", t, model.setpoint(),
-                        model.temp(), pid->sum(), pid->p(), pid->i(), pid->d())
+                        model.temp(), float{pid->sum()}, float{pid->p()},
+                        float{pid->i()}, float{pid->d()})
                 .c_str());
   }
   fclose(f);

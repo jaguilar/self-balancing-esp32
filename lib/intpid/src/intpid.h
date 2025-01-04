@@ -1,11 +1,14 @@
+#ifndef INTPID_INTPID_H
+#define INTPID_INTPID_H
+
+#include <FixedPointsCommon.h>
+
 #include <cassert>
 #include <cstdint>
 #include <expected>
 #include <limits>
 #include <memory>
 #include <string>
-
-#include "intratio.h"
 
 namespace intpid {
 
@@ -27,40 +30,43 @@ struct Config {
   float derivative_time;
 
   // The minimum and maximum setpoint.
-  int32_t setpoint_min;
-  int32_t setpoint_max;
+  float setpoint_min;
+  float setpoint_max;
 
   // The minimum and maximum measurements we will observe.
-  int32_t measurement_min;
-  int32_t measurement_max;
+  float measurement_min;
+  float measurement_max;
 
   // The minimum and maximum outputs.
-  int32_t output_min;
-  int32_t output_max;
+  float output_min;
+  float output_max;
 
   // The maximum dt that will be passed to update.
-  int32_t timestep_max;
+  float timestep_max;
 };
 
 class Pid {
  public:
+  Pid(Pid&&) = default;
+  Pid& operator=(Pid&&) = default;
+
   static std::expected<Pid, std::string> Create(const Config& config);
 
   // Adjusts the setpoint. This must be called once before the first call
   // to Update.
-  void set_setpoint(int32_t setpoint) {
-    const int32_t setpoint_diff = setpoint - setpoint_;
+  void set_setpoint(SQ15x16 setpoint) {
+    const SQ15x16 setpoint_diff = setpoint - setpoint_;
     setpoint_ = setpoint;
     // Prevent spikes in the d term by adjusting the previous error
     // to reflect the new setpoint.
     prev_err_ += setpoint_diff;
   }
 
-  int32_t Update(int32_t measurement, int32_t dt);
+  SQ15x16 Update(SQ15x16 measurement, SQ15x16 dt);
 
  private:
-  Pid(IntRatio kp, IntRatio ki, IntRatio kd, int32_t integrator_clamp,
-      int32_t output_min, int32_t output_max)
+  Pid(SQ15x16 kp, SQ15x16 ki, SQ15x16 kd, SQ15x16 integrator_clamp,
+      SQ15x16 output_min, SQ15x16 output_max)
       : kp_(kp),
         ki_(ki),
         kd_(kd),
@@ -69,21 +75,21 @@ class Pid {
         output_max_(output_max) {}
 
   struct ErrorInfo {
-    int32_t err;
-    int32_t derr;
+    SQ15x16 err;
+    SQ15x16 derr;
   };
 
-  const IntRatio kp_, ki_, kd_;
-  const int32_t integrator_clamp_;
-  const int32_t output_min_, output_max_;
+  const SQ15x16 kp_, ki_, kd_;
+  const SQ15x16 integrator_clamp_;
+  const SQ15x16 output_min_, output_max_;
 
-  int32_t setpoint_ = 0;
+  SQ15x16 setpoint_ = 0;
 
-  int32_t integrator_ = 0;
-  int32_t prev_err_ = 0;
+  SQ15x16 integrator_ = 0;
+  SQ15x16 prev_err_ = 0;
 
   // derr_ is a smoothed view of the derror term.
-  int32_t derr_ = 0;
+  SQ15x16 derr_ = 0;
 
 #if INTPID_SUPPRESS_LOGGING == 0
  public:
@@ -91,22 +97,24 @@ class Pid {
   // setpoint, measurement, and the calculated P I and D terms.
   // We also expose the state of the integrator and derr.
   // These values are for testing only.
-  int32_t setpoint() const { return setpoint_; }
-  int32_t measurement() const { return measurement_; }
-  int32_t p() const { return p_; }
-  int32_t i() const { return i_; }
-  int32_t d() const { return d_; }
-  int32_t derr() const { return derr_; }
-  int32_t integrator() const { return integrator_; }
-  int32_t sum() const { return sum_; }
+  SQ15x16 setpoint() const { return setpoint_; }
+  SQ15x16 measurement() const { return measurement_; }
+  SQ15x16 p() const { return p_; }
+  SQ15x16 i() const { return i_; }
+  SQ15x16 d() const { return d_; }
+  SQ15x16 derr() const { return derr_; }
+  SQ15x16 integrator() const { return integrator_; }
+  SQ15x16 sum() const { return sum_; }
 
  private:
-  int32_t measurement_ = 0;
-  int32_t p_ = 0;
-  int32_t i_ = 0;
-  int32_t d_ = 0;
-  int32_t sum_ = 0;
+  SQ15x16 measurement_ = 0;
+  SQ15x16 p_ = 0;
+  SQ15x16 i_ = 0;
+  SQ15x16 d_ = 0;
+  SQ15x16 sum_ = 0;
 #endif
 };
 
 }  // namespace intpid
+
+#endif  // INTPID_INTPID_H
