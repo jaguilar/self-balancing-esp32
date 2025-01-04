@@ -2,6 +2,7 @@
 #define MOTOR_MLX90393_SENSOR_H
 
 #include <Arduino.h>
+#include <FixedPointsCommon.h>
 
 #include "Adafruit_MLX90393.h"
 #include "sensor.h"
@@ -13,26 +14,26 @@ class MLX90393Sensor : public Sensor {
   MLX90393Sensor(Adafruit_MLX90393* sensor) : sensor_(sensor) {}
   ~MLX90393Sensor() override {}
 
-  void Update();
+  bool Update();
 
   // Returns the current angle of the in decidegrees. Note that this is the
   // total accumulated angle since startup. The absolute angle is not provided.
-  int angle() override { return angle_; }
+  SQ15x16 angle() override { return angle_; }
 
   // Returns the rate of rotation in degrees/sec during the last sensing
   // period. Positive is clockwise.
-  int rate() override { return speed_; }
+  SQ15x16 rate() override { return speed_; }
 
-  void SetAngle(int angle) override { angle_ = angle; };
+  void SetAngle(SQ15x16 angle) override { angle_ = angle; };
 
  private:
   Adafruit_MLX90393* const sensor_;
 
   // Last angle reading in decidegrees.
   int64_t t_ = micros();
-  int rawangle_ = 0;  // The last sensed angle.
-  int angle_ = 0;     // The total angle accumulated since startup.
-  int speed_ = 0;
+  SQ15x16 rawangle_ = 0;  // The last sensed angle.
+  SQ15x16 angle_ = 0;     // The total angle accumulated since startup.
+  SQ15x16 speed_ = 0;
 };
 
 }  // namespace motor
